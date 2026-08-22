@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LANDED — Every Job, One Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260822') }}">
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark">◆◆</span>
+      <span class="brand-text">LANDED</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#browse">Browse</a>
+      <a href="#match">Get matched</a>
+      <a href="#" id="nav-assistant">Ask the assistant</a>
+    </nav>
+    <button class="btn btn-primary btn-sm" id="nav-cta">Get matched →</button>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <p class="eyebrow">// <span id="hero-eyebrow-count">0</span> LISTINGS INDEXED</p>
+    <h1 class="hero-title">
+      Every job.<br>
+      One <span class="accent">search</span>.
+    </h1>
+    <p class="hero-sub">
+      Search the supplied multi-platform job dataset from one place. Jobs are normalized, deduplicated and enriched with skills, role categories and experience signals. Upload your resume to find relevant opportunities.
+    </p>
+
+    <form class="hero-search" id="hero-search-form" role="search">
+      <input type="text" id="hero-search-input" placeholder="Search “data analyst”, “React”, “remote”…" autocomplete="off">
+      <button type="submit" class="btn btn-primary">Search jobs</button>
+    </form>
+
+    <div class="hero-actions">
+      <button class="btn btn-outline" id="hero-match-btn">Upload resume, get matched ↗</button>
+    </div>
+
+    <!-- signature: tilted stack of live job cards -->
+    <div class="hero-stack" aria-hidden="true">
+      <div class="stack-card card-a">
+        <div class="stack-card-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <p class="stack-card-title">Senior Backend Engineer</p>
+        <p class="stack-card-meta">Naukri · Bengaluru</p>
+      </div>
+      <div class="stack-card card-b">
+        <div class="stack-card-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <p class="stack-card-title">Product Data Analyst</p>
+        <p class="stack-card-meta">LinkedIn · Remote</p>
+      </div>
+      <div class="stack-card card-c">
+        <div class="stack-card-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <p class="stack-card-title">ML Engineer Intern</p>
+        <p class="stack-card-meta">Internshala · Pune</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS STRIP -->
+  <div id="connection-status" class="connection-status">Backend status: checking…</div>
+
+  <section class="stats-strip">
+    <div class="stat">
+      <span class="stat-num" id="stat-total">—</span>
+      <span class="stat-label">jobs indexed</span>
+    </div>
+    <div class="stat-div"></div>
+    <div class="stat">
+      <span class="stat-num" id="stat-companies">—</span>
+      <span class="stat-label">companies</span>
+    </div>
+    <div class="stat-div"></div>
+    <div class="stat">
+      <span class="stat-num" id="stat-sources">—</span>
+      <span class="stat-label">platforms merged</span>
+    </div>
+    <div class="stat-div"></div>
+    <div class="stat">
+      <span class="stat-num" id="stat-updated">—</span>
+      <span class="stat-label">jobs added today</span>
+      <span class="stat-note" id="stat-today-note">Loading...</span>
+    </div>
+  </section>
+
+  <!-- BROWSE -->
+  <section class="browse" id="browse">
+    <div class="browse-head">
+      <p class="eyebrow">// BROWSE</p>
+      <h2>Filter down to the roles that fit.</h2>
+    </div>
+
+    <div class="browse-layout">
+
+      <!-- filters -->
+      <aside class="filters" id="filters">
+        <div class="filter-group">
+          <label for="f-search">Keyword / skill</label>
+          <input type="text" id="f-search" placeholder="e.g. Python, Figma, SQL">
+        </div>
+        <div class="filter-group">
+          <label for="f-source">Platform</label>
+          <select id="f-source"><option value="all">All platforms</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="f-role">Role category</label>
+          <select id="f-role"><option value="all">All categories</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="f-exp">Experience level</label>
+          <select id="f-exp"><option value="all">Any experience</option></select>
+        </div>
+        <button class="btn btn-outline btn-sm btn-block" id="f-reset">Reset filters</button>
+      </aside>
+
+      <!-- results -->
+      <div class="results">
+        <div class="results-head">
+          <p id="results-count" class="mono-label">Loading…</p>
+          <select id="sort-order" class="sort-select">
+            <option value="posted_date_desc">Newest first</option>
+          </select>
+        </div>
+
+        <div class="job-list" id="job-list">
+          <!-- job cards injected here -->
+        </div>
+
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MATCH / RESUME -->
+  <section class="match" id="match">
+    <div class="match-inner">
+      <div class="match-copy">
+        <p class="eyebrow">// GET MATCHED</p>
+        <h2>Drop in your resume.<br>We’ll rank the board <span class="accent">for you.</span></h2>
+        <p class="match-sub">
+          Parsed locally against the same skill vocabulary used to tag every listing —
+          scored by TF‑IDF similarity and skill overlap, so every match comes with a reason.
+          Your file is deleted the moment it's read.
+        </p>
+        <label class="upload-drop" id="upload-drop" for="resume-file">
+          <input type="file" id="resume-file" accept=".pdf,.docx,.txt" hidden>
+          <span class="upload-icon">↑</span>
+          <span class="upload-text" id="upload-text">Drop your resume here, or click to browse</span>
+          <span class="upload-hint">PDF, DOCX or TXT · under 5MB</span>
+        </label>
+        <div class="upload-skills" id="upload-skills" hidden>
+          <p class="mono-label">Skills detected</p>
+          <div class="chip-row" id="upload-skills-chips"></div>
+        </div>
+      </div>
+      <div class="match-results" id="match-results">
+        <p class="match-placeholder">Your top matches will land here once your resume is parsed.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- JOB DETAIL DRAWER -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<aside class="drawer" id="job-drawer">
+  <button class="drawer-close" id="drawer-close" aria-label="Close">×</button>
+  <div id="drawer-content"></div>
+</aside>
+
+<!-- AI ASSISTANT -->
+<button class="assistant-fab" id="assistant-fab" aria-label="Open AI assistant">
+  <span class="fab-dot"></span> Ask the assistant
+</button>
+
+<div class="assistant-panel" id="assistant-panel">
+  <div class="assistant-head">
+    <div>
+      <p class="mono-label">// AI JOB ASSISTANT</p>
+      <p class="assistant-sub">Gemini-powered and grounded in the indexed jobs.</p>
+    </div>
+    <button class="drawer-close" id="assistant-close" aria-label="Close">×</button>
+  </div>
+  <div class="assistant-body" id="assistant-body">
+    <div class="assistant-msg bot">
+      Hi — I can explain a listing, tell you what skills you're missing for a role, compare two
+      jobs, or suggest interview prep. Open a job first for the sharpest answers, or just ask.
+    </div>
+  </div>
+  <form class="assistant-input-row" id="assistant-form">
+    <input type="text" id="assistant-input" placeholder="Ask about a job, your resume, or prep…" autocomplete="off">
+    <button type="submit" class="btn btn-primary btn-sm">Send</button>
+  </form>
+</div>
+
+<footer class="footer">
+  <p>Fielded — a job board that reads the fine print so you don't have to.</p>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js', v='20260822') }}"></script>
+</body>
+</html>
