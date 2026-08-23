@@ -1,11 +1,14 @@
 import os
+import re
 from flask import Flask, request, jsonify, render_template, session
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from database import (
     init_db, get_jobs, get_job_by_hash, get_sources, get_role_categories,
     get_experience_levels, count_jobs, get_stats, get_recommendation_candidates, DB_PATH,
+    create_user, get_user_auth_row, get_user_by_id,
 )
 from utils.resume_parser import parse_resume
 from utils.recommender import recommend_jobs
@@ -19,7 +22,12 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 app.config["UPLOAD_FOLDER"] = os.path.join(BASE_DIR, "uploads")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB resumes max
 app.config["JSON_SORT_KEYS"] = False
+# Login sessions last 30 days (signed cookie, no server-side session store —
+# safe with multiple gunicorn workers/threads since nothing is kept in
+# process memory for this part).
+app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30
 ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 init_db()
@@ -55,6 +63,13 @@ def _session_id():
     if "sid" not in session:
         session["sid"] = os.urandom(8).hex()
     return session["sid"]
+
+
+def _current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return get_user_by_id(uid)
 
 
 @app.errorhandler(RequestEntityTooLarge)
@@ -190,6 +205,60 @@ def api_recommendations():
     candidates = get_recommendation_candidates(parsed["skills"], limit=5000)
     recs = recommend_jobs(parsed["raw_text"], parsed["skills"], candidates, top_n=10)
     return jsonify({"recommendations": recs, "resume_skills": parsed["skills"]})
+
+
+@app.route("/api/auth/signup", methods=["POST"])
+def api_signup():
+    data = request.get_json(force=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    name = (data.get("name") or "").strip() or None
+
+    if not email or not EMAIL_RE.match(email):
+        return jsonify({"error": "Enter a valid email address."}), 400
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters."}), 400
+    if name and len(name) > 100:
+        return jsonify({"error": "Name is too long."}), 400
+
+    user = create_user(email, generate_password_hash(password), name)
+    if user is None:
+        return jsonify({"error": "An account with that email already exists."}), 409
+
+    session["user_id"] = user["id"]
+    session.permanent = True
+    return jsonify({"user": user})
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    data = request.get_json(force=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    row = get_user_auth_row(email)
+    # Constant-shape response either way (don't reveal whether the email
+    # exists) — check_password_hash on a dummy hash keeps timing similar
+    # even when there's no matching row.
+    valid = bool(row) and check_password_hash(row["password_hash"], password)
+    if not valid:
+        return jsonify({"error": "Incorrect email or password."}), 401
+
+    session["user_id"] = row["id"]
+    session.permanent = True
+    return jsonify({"user": {"id": row["id"], "email": row["email"], "name": row.get("name")}})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    session.pop("user_id", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/me")
+def api_me():
+    user = _current_user()
+    return jsonify({"user": user})
 
 
 @app.route("/api/chat", methods=["POST"])

@@ -512,6 +512,55 @@ input, select{ font-family: inherit; }
 }
 .drawer-close:hover{ border-color: var(--accent); color: var(--accent); }
 
+/* ============ AUTH MODAL ============ */
+.modal-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  z-index: 60; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+}
+.modal-overlay.open{ opacity: 1; pointer-events: auto; }
+.auth-modal{
+  position: fixed; top: 50%; left: 50%;
+  width: min(400px, 92vw);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 61;
+  padding: 28px;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-50%, -50%) scale(.97);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+.auth-modal.open{ opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.auth-tabs{ display: flex; gap: 6px; margin-bottom: 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
+.auth-tab{
+  flex: 1; padding: 8px 10px; background: transparent; border: none; border-radius: 5px;
+  color: var(--text-muted); font-family: var(--font-body); font-size: 13px; cursor: pointer;
+}
+.auth-tab.active{ background: var(--bg-raised); color: var(--text); }
+.auth-title{ font-family: var(--font-display); font-size: 20px; margin: 0 0 4px; padding-right: 24px; }
+.auth-sub{ font-size: 13px; color: var(--text-muted); margin: 0 0 18px; line-height: 1.5; }
+.auth-form{ display: flex; flex-direction: column; gap: 14px; }
+.auth-field{ margin: 0; }
+.auth-error{
+  margin: 0; padding: 9px 12px; background: rgba(255,107,107,0.08);
+  border: 1px solid rgba(255,107,107,0.3); border-radius: var(--radius-sm);
+  color: var(--danger); font-size: 12.5px;
+}
+.auth-switch{ margin: 16px 0 0; text-align: center; font-size: 13px; color: var(--text-muted); }
+.auth-switch a{ color: var(--accent); text-decoration: none; margin-left: 4px; }
+.auth-switch a:hover{ text-decoration: underline; }
+
+.nav-auth{ display: flex; align-items: center; gap: 16px; }
+.nav-login-link{ font-size: 14px; color: var(--text-muted); text-decoration: none; }
+.nav-login-link:hover{ color: var(--text); }
+.nav-account{ display: flex; align-items: center; gap: 10px; }
+.nav-account-email{ font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); }
+.nav-logout-btn{
+  background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-muted); font-size: 12.5px; padding: 6px 12px; cursor: pointer;
+}
+.nav-logout-btn:hover{ border-color: var(--accent); color: var(--accent); }
+
 .drawer-title{ font-family: var(--font-display); font-size: 22px; margin: 8px 0 6px; padding-right: 30px; }
 .drawer-company{ color: var(--text-muted); margin: 0 0 16px; }
 .drawer-meta-row{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }

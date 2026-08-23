@@ -2,6 +2,35 @@
 
 A Flask job board built from the supplied structured JSON dataset. The JSON is the source of truth; SQLite is the derived runtime query layer.
 
+## New: email/password login
+
+`Log in` in the nav opens a modal to create an account or log in — plain
+email + password, hashed with Werkzeug's `generate_password_hash` (never
+stored or returned in plaintext). Session is a signed cookie (no server-side
+session store, so it's safe with multiple gunicorn threads/workers).
+
+**Read this before you rely on it tonight:** Render's free tier filesystem
+is ephemeral — it's wiped not just on redeploys but on every restart and
+every 15-minute idle spin-down (confirmed from Render's own docs, see
+below). SQLite (including the new `users` table) lives on that filesystem,
+so signed-up accounts will periodically vanish on the free tier. This is
+NOT a bug in the code — the `users` table is deliberately excluded from the
+`--reset` step your build command runs on every deploy, so redeploys alone
+don't touch it (verified: created a user, ran the exact reset your
+`render.yaml` build uses, account survived). It's specifically Render's
+free-tier ephemeral disk that periodically clears it, independent of your
+code.
+
+**If you want accounts to actually persist:** upgrade to the Starter plan
+($7/mo) and attach a persistent disk (~$0.25/GB/mo, 1GB is plenty), mounted
+at some path (e.g. `/var/data`), then set the environment variable
+`DB_PATH=/var/data/jobboard.db` in Render's dashboard. No code changes
+needed — `database.py` already reads `DB_PATH` from the environment and
+falls back to its current in-repo location if unset.
+
+Endpoints: `POST /api/auth/signup`, `POST /api/auth/login`,
+`POST /api/auth/logout`, `GET /api/auth/me`.
+
 ## Fixed in this pass — why deploys weren't working
 
 **Root cause: the database build step used 1.68 GB of RAM at peak**, because
@@ -151,3 +180,7 @@ Flask REST API
 - `POST /api/resume/upload`
 - `GET /api/recommendations`
 - `POST /api/chat`
+- `POST /api/auth/signup` — `{email, password, name?}` → `{user}` (409 if email taken, 400 if invalid)
+- `POST /api/auth/login` — `{email, password}` → `{user}` (401 on failure)
+- `POST /api/auth/logout` → `{ok: true}`
+- `GET /api/auth/me` → `{user}` or `{user: null}`

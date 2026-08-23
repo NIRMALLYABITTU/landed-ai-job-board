@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -15,7 +16,11 @@ except Exception:
     ZoneInfo = None
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "jobboard.db"
+# Configurable so a persistent Render disk (or any other mount) can be used
+# later without touching code: set DB_PATH to an absolute path (e.g. the
+# disk's mount path) and the app will read/write the database there instead.
+# Unset by default -> unchanged existing behavior.
+DB_PATH = Path(os.environ["DB_PATH"]) if os.environ.get("DB_PATH") else BASE_DIR / "jobboard.db"
 
 def _norm(s):
     return re.sub(r"\s+", " ", str(s or "").strip().lower())
@@ -39,6 +44,9 @@ def init_db(reset=False):
         if reset:
             c.execute("DROP TABLE IF EXISTS jobs")
             c.execute("DROP TABLE IF EXISTS resumes")
+            # NOTE: `users` is intentionally NOT in this drop list. `reset`
+            # is triggered by every deploy's build step (data refresh) and
+            # must never wipe existing accounts.
         c.execute("""
         CREATE TABLE IF NOT EXISTS jobs(
             dedup_key TEXT PRIMARY KEY,
@@ -72,12 +80,20 @@ def init_db(reset=False):
             skills TEXT,
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS users(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
         for sql in [
             "CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_date DESC)",
             "CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company)",
             "CREATE INDEX IF NOT EXISTS idx_jobs_role ON jobs(role_category)",
             "CREATE INDEX IF NOT EXISTS idx_jobs_experience ON jobs(experience_level)",
             "CREATE INDEX IF NOT EXISTS idx_jobs_domain ON jobs(domain)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)",
         ]:
             c.execute(sql)
 
@@ -285,3 +301,44 @@ def get_recommendation_candidates(skills, limit=5000):
 def save_resume(filename, raw_text, skills):
     with get_conn() as c:
         return c.execute("INSERT INTO resumes(filename,raw_text,skills) VALUES(?,?,?)", (filename, raw_text, json.dumps(skills))).lastrowid
+
+
+# ---------------- User accounts ----------------
+
+def _row_to_user(r):
+    if not r:
+        return None
+    d = dict(r)
+    d.pop("password_hash", None)  # never leak the hash past this module
+    return d
+
+
+def create_user(email, password_hash, name=None):
+    """Returns the new user's row (without password_hash), or None if the
+    email is already registered."""
+    email = (email or "").strip().lower()
+    with get_conn() as c:
+        try:
+            cur = c.execute(
+                "INSERT INTO users(email, password_hash, name) VALUES (?,?,?)",
+                (email, password_hash, name),
+            )
+        except sqlite3.IntegrityError:
+            return None
+        row = c.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return _row_to_user(row)
+
+
+def get_user_auth_row(email):
+    """Includes password_hash — for login verification only. Callers must
+    not return this dict directly to the client."""
+    email = (email or "").strip().lower()
+    with get_conn() as c:
+        row = c.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_id(user_id):
+    with get_conn() as c:
+        row = c.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return _row_to_user(row)

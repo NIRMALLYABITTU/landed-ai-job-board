@@ -447,6 +447,125 @@
     });
   }
 
+  // ---------- AUTH ----------
+  const authState = { mode: "login", user: null };
+
+  function openAuthModal(mode) {
+    setAuthMode(mode || "login");
+    $("#auth-error").hidden = true;
+    $("#auth-form").reset();
+    $("#auth-overlay").classList.add("open");
+    $("#auth-modal").classList.add("open");
+    $("#auth-modal").setAttribute("aria-hidden", "false");
+    setTimeout(() => $("#auth-email")?.focus(), 50);
+  }
+
+  function closeAuthModal() {
+    $("#auth-overlay").classList.remove("open");
+    $("#auth-modal").classList.remove("open");
+    $("#auth-modal").setAttribute("aria-hidden", "true");
+  }
+
+  function setAuthMode(mode) {
+    authState.mode = mode;
+    const isSignup = mode === "signup";
+    $("#auth-tab-login").classList.toggle("active", !isSignup);
+    $("#auth-tab-signup").classList.toggle("active", isSignup);
+    $("#auth-name-field").hidden = !isSignup;
+    $("#auth-modal-title").textContent = isSignup ? "Create your account" : "Welcome back";
+    $("#auth-sub").textContent = isSignup
+      ? "Save your matches and pick up where you left off next time."
+      : "Log in to save your matches and pick up where you left off.";
+    $("#auth-submit").textContent = isSignup ? "Create account" : "Log in";
+    $("#auth-password").setAttribute("autocomplete", isSignup ? "new-password" : "current-password");
+    $("#auth-switch-text").textContent = isSignup ? "Already have an account?" : "Don't have an account?";
+    $("#auth-switch-link").textContent = isSignup ? "Log in" : "Create one";
+    $("#auth-error").hidden = true;
+  }
+
+  function renderAuthNav() {
+    const slot = $("#nav-auth-slot");
+    if (!slot) return;
+    if (authState.user) {
+      const label = authState.user.name || authState.user.email;
+      slot.innerHTML = `
+        <div class="nav-account">
+          <span class="nav-account-email" title="${escapeHtml(authState.user.email)}">${escapeHtml(label)}</span>
+          <button class="nav-logout-btn" id="nav-logout-btn" type="button">Log out</button>
+        </div>`;
+      $("#nav-logout-btn").addEventListener("click", handleLogout);
+    } else {
+      slot.innerHTML = `<a href="#" id="nav-login-link" class="nav-login-link">Log in</a>`;
+      $("#nav-login-link").addEventListener("click", (e) => { e.preventDefault(); openAuthModal("login"); });
+    }
+  }
+
+  async function refreshAuthState() {
+    try {
+      const data = await fetch("/api/auth/me").then(readApiResponse);
+      authState.user = data.user || null;
+    } catch (e) {
+      authState.user = null;
+    }
+    renderAuthNav();
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" }).then(readApiResponse);
+    } catch (e) {
+      console.error("Logout failed:", e);
+    }
+    authState.user = null;
+    renderAuthNav();
+  }
+
+  function bindAuth() {
+    $("#nav-login-link")?.addEventListener("click", (e) => { e.preventDefault(); openAuthModal("login"); });
+    $("#auth-close").addEventListener("click", closeAuthModal);
+    $("#auth-overlay").addEventListener("click", closeAuthModal);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAuthModal(); });
+
+    $("#auth-tab-login").addEventListener("click", () => setAuthMode("login"));
+    $("#auth-tab-signup").addEventListener("click", () => setAuthMode("signup"));
+    $("#auth-switch-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      setAuthMode(authState.mode === "signup" ? "login" : "signup");
+    });
+
+    $("#auth-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("#auth-email").value.trim();
+      const password = $("#auth-password").value;
+      const name = $("#auth-name").value.trim();
+      const errorEl = $("#auth-error");
+      const submitBtn = $("#auth-submit");
+      errorEl.hidden = true;
+      submitBtn.disabled = true;
+      const originalLabel = submitBtn.textContent;
+      submitBtn.textContent = authState.mode === "signup" ? "Creating account…" : "Logging in…";
+
+      try {
+        const endpoint = authState.mode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+        const body = authState.mode === "signup" ? { email, password, name } : { email, password };
+        const data = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).then(readApiResponse);
+        authState.user = data.user;
+        renderAuthNav();
+        closeAuthModal();
+      } catch (err) {
+        errorEl.textContent = err.message || "Something went wrong. Please try again.";
+        errorEl.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
+    });
+  }
+
   // ---------- INIT ----------
   function bindDrawer() {
     $("#drawer-close").addEventListener("click", closeDrawer);
@@ -460,6 +579,8 @@
     bindDrawer();
     bindUpload();
     bindAssistant();
+    bindAuth();
+    refreshAuthState();
     loadStats();
     fetch("/api/health").then(readApiResponse).then(d => { const status = $("#connection-status"); if (status) status.textContent = `Backend connected · ${Number(d.database_jobs || 0).toLocaleString()} jobs indexed`; }).catch(e => { const status = $("#connection-status"); if (status) status.textContent = "Backend connection failed · check the Flask terminal"; console.error("API health check failed:", e); });
     loadFilterOptions();

@@ -25,7 +25,12 @@
       <a href="#match">Get matched</a>
       <a href="#" id="nav-assistant">Ask the assistant</a>
     </nav>
-    <button class="btn btn-primary btn-sm" id="nav-cta">Get matched →</button>
+    <div class="nav-auth" id="nav-auth">
+      <span id="nav-auth-slot">
+        <a href="#" id="nav-login-link" class="nav-login-link">Log in</a>
+      </span>
+      <button class="btn btn-primary btn-sm" id="nav-cta">Upload résumé →</button>
+    </div>
   </div>
 </header>
 
@@ -48,7 +53,7 @@
     </form>
 
     <div class="hero-actions">
-      <button class="btn btn-outline" id="hero-match-btn">Upload resume, get matched ↗</button>
+      <button class="btn btn-outline" id="hero-match-btn">See your matches ↗</button>
     </div>
 
     <!-- signature: tilted stack of live job cards -->
@@ -175,6 +180,39 @@
 
 </main>
 
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="auth-overlay"></div>
+<div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+  <button class="drawer-close" id="auth-close" aria-label="Close">×</button>
+  <div class="auth-tabs">
+    <button type="button" class="auth-tab active" id="auth-tab-login" data-mode="login">Log in</button>
+    <button type="button" class="auth-tab" id="auth-tab-signup" data-mode="signup">Create account</button>
+  </div>
+  <h3 class="auth-title" id="auth-modal-title">Welcome back</h3>
+  <p class="auth-sub" id="auth-sub">Log in to save your matches and pick up where you left off.</p>
+
+  <form id="auth-form" class="auth-form">
+    <div class="filter-group auth-field" id="auth-name-field" hidden>
+      <label for="auth-name">Name</label>
+      <input type="text" id="auth-name" autocomplete="name" placeholder="Optional">
+    </div>
+    <div class="filter-group auth-field">
+      <label for="auth-email">Email</label>
+      <input type="email" id="auth-email" autocomplete="email" required placeholder="you@example.com">
+    </div>
+    <div class="filter-group auth-field">
+      <label for="auth-password">Password</label>
+      <input type="password" id="auth-password" autocomplete="current-password" required placeholder="At least 8 characters">
+    </div>
+    <p class="auth-error" id="auth-error" hidden></p>
+    <button type="submit" class="btn btn-primary btn-block" id="auth-submit">Log in</button>
+  </form>
+  <p class="auth-switch">
+    <span id="auth-switch-text">Don't have an account?</span>
+    <a href="#" id="auth-switch-link">Create one</a>
+  </p>
+</div>
+
 <!-- JOB DETAIL DRAWER -->
 <div class="drawer-overlay" id="drawer-overlay"></div>
 <aside class="drawer" id="job-drawer">
@@ -184,7 +222,7 @@
 
 <!-- AI ASSISTANT -->
 <button class="assistant-fab" id="assistant-fab" aria-label="Open AI assistant">
-  <span class="fab-dot"></span> Ask the assistant
+  <span class="fab-dot"></span> Chat with AI
 </button>
 
 <div class="assistant-panel" id="assistant-panel">
