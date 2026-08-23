@@ -102,13 +102,23 @@
   }
 
   function fillSelect(selectEl, values, allLabel) {
+    if (!selectEl) return;
+
     selectEl.innerHTML = "";
-    selectEl.appendChild(el("option", null, allLabel)).value = "all";
-    (values || []).forEach((v) => {
-      if (!v) return;
-      const opt = el("option", null, escapeHtml(v));
-      opt.value = v;
-      selectEl.appendChild(opt);
+
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.textContent = allLabel;
+    selectEl.appendChild(allOption);
+
+    (values || []).forEach((value) => {
+        if (!value) return;
+
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+
+        selectEl.appendChild(option);
     });
   }
 
