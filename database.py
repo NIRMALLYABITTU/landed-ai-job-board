@@ -260,9 +260,34 @@ def get_role_categories():
         return [r[0] for r in c.execute("SELECT DISTINCT role_category FROM jobs WHERE role_category IS NOT NULL AND role_category<>'' ORDER BY role_category")]
 
 def get_experience_levels():
-    with get_conn() as c:
-        return [r[0] for r in c.execute("SELECT DISTINCT experience_level FROM jobs WHERE experience_level IS NOT NULL AND experience_level<>'' ORDER BY experience_level")]
+    """
+    Return experience filters in a meaningful candidate-facing order.
+    """
+    preferred_order = [
+        "Fresher",
+        "0-1 years",
+        "1-3 years",
+        "3-5 years",
+        "5-8 years",
+        "8+ years",
+        "Not specified",
+    ]
 
+    with get_conn() as c:
+        rows = c.execute("""
+            SELECT DISTINCT experience_level
+            FROM jobs
+            WHERE experience_level IS NOT NULL
+              AND experience_level <> ''
+        """).fetchall()
+
+    available = {str(r[0]).strip() for r in rows}
+
+    return [
+        level
+        for level in preferred_order
+        if level in available
+    ]
 def get_all_jobs(limit=None):
     with get_conn() as c:
         q = "SELECT * FROM jobs ORDER BY posted_date DESC"
