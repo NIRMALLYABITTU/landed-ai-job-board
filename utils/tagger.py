@@ -64,93 +64,63 @@ def extract_skills(text: str):
 
 
 def extract_experience(text: str, fallback: str = None):
-    """
-    Convert raw experience information into structured experience bands.
-
-    Supported bands:
-    Fresher
-    0-1 years
-    1-3 years
-    3-5 years
-    5-8 years
-    8+ years
-    Not specified
-    """
-
+    """Normalize raw experience into candidate-facing experience bands."""
     value = str(fallback or "").strip()
 
-    # First check the actual job description.
     if text:
         text_l = text.lower()
 
         if re.search(r"\bfresher\b|\bentry[- ]level\b", text_l):
             return "Fresher"
 
-        # Explicit ranges such as 2-4 years
         m = re.search(r"\b(\d+)\s*-\s*(\d+)\s*(?:years|yrs)\b", text_l)
-
         if m:
             low = float(m.group(1))
-
             if low < 1:
                 return "0-1 years"
-            elif low < 3:
+            if low < 3:
                 return "1-3 years"
-            elif low < 5:
+            if low < 5:
                 return "3-5 years"
-            elif low < 8:
+            if low < 8:
                 return "5-8 years"
-            else:
-                return "8+ years"
+            return "8+ years"
 
-        # Values such as 5+ years
         m = re.search(r"\b(\d+)\+\s*(?:years|yrs)\b", text_l)
-
         if m:
             years = float(m.group(1))
-
             if years < 1:
                 return "0-1 years"
-            elif years < 3:
+            if years < 3:
                 return "1-3 years"
-            elif years < 5:
+            if years < 5:
                 return "3-5 years"
-            elif years < 8:
+            if years < 8:
                 return "5-8 years"
-            else:
-                return "8+ years"
+            return "8+ years"
 
-        # Values such as "3 years"
         m = re.search(r"\b(\d+)\s*(?:years|yrs)\b", text_l)
-
         if m:
             value = m.group(1)
 
-    # Handle numeric dataset values such as 0, 1, 2, 3, 5, 10.
     numeric = re.match(r"^\s*(\d+(?:\.\d+)?)\s*$", value)
-
     if numeric:
         years = float(numeric.group(1))
-
         if years <= 0:
             return "Fresher"
-        elif years <= 1:
+        if years <= 1:
             return "0-1 years"
-        elif years <= 3:
+        if years <= 3:
             return "1-3 years"
-        elif years <= 5:
+        if years <= 5:
             return "3-5 years"
-        elif years <= 8:
+        if years <= 8:
             return "5-8 years"
-        else:
-            return "8+ years"
+        return "8+ years"
 
-    # Handle malformed values such as "200,022".
-    # Do not allow these to become a misleading experience category.
     if "," in value:
         return "Not specified"
 
-    # Preserve explicit fresher information.
     if value.lower() in {"fresher", "entry level", "entry-level"}:
         return "Fresher"
 
