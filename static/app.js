@@ -1,10 +1,12 @@
 (() => {
   "use strict";
 
+  let currentJobHash = null;
+
   const state = {
     page: 1,
     per_page: 20,
-    filters: { search: "", source: "all", role_category: "all", experience_level: "all" },
+    filters: { search: "", source: "all", role_category: "all", experience_level: "all", work_mode: "all", location: "all" },
     lastJobs: [],
   };
 
@@ -96,6 +98,8 @@
       fillSelect($("#f-source"), d.sources, "All platforms");
       fillSelect($("#f-role"), d.role_categories, "All categories");
       fillSelect($("#f-exp"), d.experience_levels, "Any experience");
+      fillSelect($("#f-work-mode"), d.work_modes, "Any work mode");
+      fillSelect($("#f-location"), d.locations, "All locations");
     } catch (e) {
       console.error("filter options failed", e);
     }
@@ -112,13 +116,11 @@
     selectEl.appendChild(allOption);
 
     (values || []).forEach((value) => {
-        if (!value) return;
-
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-
-        selectEl.appendChild(option);
+      if (!value) return;
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      selectEl.appendChild(option);
     });
   }
 
@@ -134,6 +136,8 @@
       source: state.filters.source,
       role_category: state.filters.role_category,
       experience_level: state.filters.experience_level,
+      work_mode: state.filters.work_mode,
+      location: state.filters.location,
     });
 
     try {
@@ -236,13 +240,17 @@
     $("#f-source").addEventListener("change", (e) => { state.filters.source = e.target.value; state.page = 1; loadJobs(); });
     $("#f-role").addEventListener("change", (e) => { state.filters.role_category = e.target.value; state.page = 1; loadJobs(); });
     $("#f-exp").addEventListener("change", (e) => { state.filters.experience_level = e.target.value; state.page = 1; loadJobs(); });
+    $("#f-work-mode").addEventListener("change", (e) => { state.filters.work_mode = e.target.value; state.page = 1; loadJobs(); });
+    $("#f-location").addEventListener("change", (e) => { state.filters.location = e.target.value; state.page = 1; loadJobs(); });
     $("#f-reset").addEventListener("click", () => {
-      state.filters = { search: "", source: "all", role_category: "all", experience_level: "all" };
+      state.filters = { search: "", source: "all", role_category: "all", experience_level: "all", work_mode: "all", location: "all" };
       state.page = 1;
       $("#f-search").value = "";
       $("#f-source").value = "all";
       $("#f-role").value = "all";
       $("#f-exp").value = "all";
+      $("#f-work-mode").value = "all";
+      $("#f-location").value = "all";
       loadJobs();
     });
 
@@ -397,7 +405,6 @@
   }
 
   // ---------- AI ASSISTANT ----------
-  let currentJobHash = null;
 
   function openAssistant() {
     $("#assistant-panel").classList.add("open");
