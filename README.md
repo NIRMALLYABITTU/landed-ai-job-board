@@ -4,10 +4,8 @@
 
 ## Submission Links — REQUIRED
 
-> Replace the two placeholders below before submitting the assignment. The evaluator must be able to open them directly from this README.
-
 - **Live deployed prototype:** `https://landed-ai-job-board.onrender.com/`
-- **Explanation video (English, view access enabled):** `REPLACE_WITH_GOOGLE_DRIVE_OR_VIDEO_URL`
+- **Explanation video (English, view access enabled):** `https://drive.google.com/file/d/1EK9qz5ExXyC-wPZ4W8VgSGhas3LJTLJr/view?usp=sharing`
 - **Public GitHub repository:** https://github.com/NIRMALLYABITTU/landed-ai-job-board
 
 LANDED is an AI-powered job discovery platform built for the AlmaBetter Research Analyst hiring assignment. It uses the supplied structured job dataset as its primary source of truth and turns that dataset into a searchable, deduplicated, filterable job board with resume matching and a grounded Gemini assistant.
@@ -28,7 +26,7 @@ The application is designed around the assignment requirement that the provided 
 
 ## Dataset and data pipeline
 
-The supplied dataset contains **56,769 source job records**. LANDED applies normalization and deduplication before the records are used by the application.
+The supplied dataset contains **56,769 source job records**. LANDED applies normalisation and deduplication before the application uses the records.
 
 Current verified result from the supplied dataset:
 
@@ -39,7 +37,7 @@ Current verified result from the supplied dataset:
 | Duplicate records merged | 10,916 |
 |
 
-The canonical deduplication key is based on normalized:
+The canonical deduplication key is based on normalised:
 
 ```text
 job title + company + location
@@ -97,12 +95,12 @@ Gemini structured extraction
         ↓
 skills + role_category + experience_level
         ↓
-deterministic validation / normalization
+deterministic validation/normalization
         ↓
 SQLite runtime database
 ```
 
-The Gemini step is **preprocessing**, not a runtime dependency for every search. If an LLM enrichment request is unavailable, the deterministic `utils/tagger.py` layer provides a reproducible fallback and normalizes the output into the same schema. This makes the architecture explainable and keeps search reliable.
+The Gemini step is **preprocessing**, not a runtime dependency for every search. If an LLM enrichment request is unavailable, the deterministic `utils/tagger.py` layer provides a reproducible fallback and normalises the output into the same schema. This makes the architecture explainable and keeps search reliable.
 
 `enrich_with_gemini.py` never stores the Gemini key; it reads `GEMINI_API_KEY` from the environment.
 
@@ -131,9 +129,9 @@ Tokio
 
 ### Role classification
 
-Jobs are assigned a role category to improve discovery and recommendation quality.
+Jobs are assigned a role category to improve the quality of discovery and recommendations.
 
-### Experience normalization
+### Experience normalisation
 
 Raw numeric or textual experience signals are converted into user-friendly bands:
 
@@ -192,7 +190,7 @@ Locations are populated dynamically from the database rather than being hard-cod
 
 ---
 
-## Resume matching and personalized recommendations
+## Resume matching and personalised recommendations
 
 Candidates can upload a resume in:
 
@@ -279,7 +277,7 @@ The flow is:
 ```text
 User question
       ↓
-Selected job / candidate context retrieved
+Selected job/candidate context retrieved
       ↓
 Structured grounded context
       ↓
