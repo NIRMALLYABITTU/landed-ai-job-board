@@ -1,16 +1,17 @@
 """
-AI-based job classification & tagging — WITHOUT any external API key.
+Job enrichment utilities with deterministic validation/fallback.
+
+AI/LLM enrichment is supported by ``enrich_with_gemini.py`` during dataset
+preparation. This module provides the deterministic validation/fallback layer
+used when an enriched field is missing, malformed, or needs normalization.
+That separation keeps the runtime job board reproducible and avoids making a
+network call for every search request.
 
 Approach:
-- A curated skills/technology dictionary (extensible) is matched against
-  job description text using word-boundary-safe regex, so "R" doesn't
-  match inside "Research" etc.
-- Role category is inferred from title keywords.
-- Experience level is extracted via regex patterns ("2-4 years",
-  "fresher", "0-1 yrs", etc).
-- This is deliberately deterministic/local (no network, no API key) so it
-  always works offline. It's easy to swap in a transformer-based NER /
-  zero-shot classifier later (see README) without changing the interface.
+- Validate/augment skills with a curated, word-boundary-safe dictionary.
+- Normalize role categories into stable application-facing buckets.
+- Normalize experience into candidate-facing bands.
+- Preserve source-provided structured metadata rather than discarding it.
 """
 import re
 
