@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from database import (
     init_db, get_jobs, get_job_by_hash, get_sources, get_role_categories,
-    get_experience_levels, count_jobs, get_stats, get_recommendation_candidates, DB_PATH,
+    get_experience_levels, get_work_modes, get_locations, count_jobs, get_stats, get_recommendation_candidates, DB_PATH,
     create_user, get_user_auth_row, get_user_by_id,
 )
 from utils.resume_parser import parse_resume
@@ -104,6 +104,8 @@ def api_sources():
         "sources": get_sources(),
         "role_categories": get_role_categories(),
         "experience_levels": get_experience_levels(),
+        "work_modes": get_work_modes(),
+        "locations": get_locations(),
     })
 
 
@@ -119,13 +121,22 @@ def api_jobs():
     skill = request.args.get("skill")
     role_category = request.args.get("role_category")
     experience_level = request.args.get("experience_level")
+    work_mode = request.args.get("work_mode")
+    location = request.args.get("location")
 
     page = max(1, request.args.get("page", 1, type=int))
     per_page = min(60, max(1, request.args.get("per_page", 20, type=int)))
     offset = (page - 1) * per_page
 
-    filters = dict(source=source, search=search, skill=skill,
-                    role_category=role_category, experience_level=experience_level)
+    filters = dict(
+        source=source,
+        search=search,
+        skill=skill,
+        role_category=role_category,
+        experience_level=experience_level,
+        work_mode=work_mode,
+        location=location,
+    )
 
     jobs = get_jobs(limit=per_page, offset=offset, **filters)
     total = count_jobs(**filters)
