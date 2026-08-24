@@ -387,6 +387,12 @@
       d.recommendations.forEach((job) => {
         const score = job.match_score != null ? Math.round(job.match_score) : null;
         const item = el("div", "match-item");
+        const breakdown = [];
+        if (job.semantic_score != null) breakdown.push(`Semantic ${Math.round(job.semantic_score)}%`);
+        if (job.skill_score != null) breakdown.push(`Skills ${Math.round(job.skill_score)}%`);
+        if (job.experience_score != null) breakdown.push(`Experience ${Math.round(job.experience_score)}%`);
+        if (job.role_score != null) breakdown.push(`Role ${Math.round(job.role_score)}%`);
+
         item.innerHTML = `
           <div class="match-item-top">
             <span class="match-item-title">${escapeHtml(job.title || "Untitled role")}</span>
@@ -394,6 +400,7 @@
           </div>
           <p class="match-item-meta">${escapeHtml(job.company || "")} · ${escapeHtml(job.location || "")}</p>
           ${job.matched_skills && job.matched_skills.length ? `<p class="match-item-why">Shares: ${escapeHtml(job.matched_skills.join(", "))}</p>` : ""}
+          ${breakdown.length ? `<p class="match-item-why">${escapeHtml(breakdown.join(" · "))}</p>` : ""}
         `;
         item.addEventListener("click", () => openDrawer(job));
         wrap.appendChild(item);
@@ -430,10 +437,19 @@
     body.scrollTop = body.scrollHeight;
 
     try {
+      const userGeminiKey = $("#gemini-api-key")?.value.trim() || "";
+      const payload = {
+        question,
+        job_hash: jobHash || currentJobHash || null,
+      };
+      if (userGeminiKey) {
+        payload.gemini_api_key = userGeminiKey;
+      }
+
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, job_hash: jobHash || currentJobHash || null }),
+        body: JSON.stringify(payload),
       });
       const d = await readApiResponse(r);
       thinking.textContent = d.answer || "I couldn't find a grounded answer for that — try rephrasing, or open a specific job first.";
