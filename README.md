@@ -2,7 +2,15 @@
 
 **Find the job. Understand the fit. Land the role.**
 
-LANDED is an AI-powered job discovery platform built for the Almabetter Research Analyst hiring assignment. It uses the supplied structured job dataset as its primary source of truth and turns that dataset into a searchable, deduplicated, filterable job board with resume matching and a grounded Gemini assistant.
+## Submission Links — REQUIRED
+
+> Replace the two placeholders below before submitting the assignment. The evaluator must be able to open them directly from this README.
+
+- **Live deployed prototype:** `REPLACE_WITH_YOUR_RENDER_URL`
+- **Explanation video (English, view access enabled):** `REPLACE_WITH_GOOGLE_DRIVE_OR_VIDEO_URL`
+- **Public GitHub repository:** https://github.com/NIRMALLYABITTU/landed-ai-job-board
+
+LANDED is an AI-powered job discovery platform built for the AlmaBetter Research Analyst hiring assignment. It uses the supplied structured job dataset as its primary source of truth and turns that dataset into a searchable, deduplicated, filterable job board with resume matching and a grounded Gemini assistant.
 
 ## What LANDED does
 
@@ -77,6 +85,26 @@ The application can expose sources such as:
 The application does **not** scrape these platforms.
 
 ---
+
+## AI / LLM-based classification pipeline
+
+The assignment explicitly asks for AI/LLM-based processing of job descriptions. LANDED addresses that requirement with a preprocessing pipeline in `enrich_with_gemini.py`. The preprocessing flow is:
+
+```text
+Supplied job description
+        ↓
+Gemini structured extraction
+        ↓
+skills + role_category + experience_level
+        ↓
+deterministic validation / normalization
+        ↓
+SQLite runtime database
+```
+
+The Gemini step is **preprocessing**, not a runtime dependency for every search. If an LLM enrichment request is unavailable, the deterministic `utils/tagger.py` layer provides a reproducible fallback and normalizes the output into the same schema. This makes the architecture explainable and keeps search reliable.
+
+`enrich_with_gemini.py` never stores the Gemini key; it reads `GEMINI_API_KEY` from the environment.
 
 ## AI / NLP enrichment
 
@@ -164,7 +192,7 @@ Locations are populated dynamically from the database rather than being hard-cod
 
 ---
 
-## Resume matching
+## Resume matching and personalized recommendations
 
 Candidates can upload a resume in:
 
@@ -174,9 +202,7 @@ DOCX
 TXT
 ```
 
-The resume is parsed locally and converted into structured candidate signals, including detected skills and an experience-level signal.
-
-The uploaded temporary file is deleted after parsing.
+The resume is parsed locally and converted into structured candidate signals, including detected skills, an experience band, and a role/category signal.
 
 ### Recommendation pipeline
 
@@ -185,18 +211,31 @@ Resume
   ↓
 Resume parser
   ↓
-Candidate skills / profile signals
+Candidate skills + experience + role signals
   ↓
 Skill-overlap candidate retrieval
   ↓
-TF-IDF similarity ranking
+TF-IDF semantic similarity
   ↓
-Top job recommendations
+Experience-fit scoring
+  ↓
+Role-relevance scoring
+  ↓
+Weighted final ranking
+  ↓
+Top recommendations
 ```
 
-The recommender first narrows the job inventory using explicit skill overlap and then performs similarity ranking on the bounded candidate set. This avoids loading the entire 45k+ job inventory into the recommendation engine for every request.
+The current ranking is intentionally explainable:
 
----
+| Component | Weight |
+|---|---:|
+| Job-description / title semantic similarity (TF-IDF) | 35% |
+| Skill coverage | 30% |
+| Experience fit | 20% |
+| Role relevance | 15% |
+
+Each result exposes matched skills and the score components so the recommendation can be defended during an interview.
 
 ## Explainable CV match and skill gaps
 
@@ -253,13 +292,10 @@ The prompt instructs the model not to invent job facts, companies, salaries, dat
 
 ### Gemini API key
 
-The application reads the Gemini key from:
+The assistant supports **both** deployment-level and user-provided Gemini keys:
 
-```text
-GEMINI_API_KEY
-```
-
-The key is intentionally kept server-side. It should be configured as an environment variable in deployment rather than committed to GitHub.
+1. **Render/server key:** `GEMINI_API_KEY` is the secure default for the deployment.
+2. **User-provided key:** the assistant UI accepts an optional Gemini key and sends it only with the current chat request. It is not written to the database, Flask session, browser local storage, or filesystem.
 
 For local development on PowerShell:
 
@@ -268,7 +304,9 @@ $env:GEMINI_API_KEY="YOUR_REAL_GEMINI_KEY"
 python app.py
 ```
 
-For Render, add `GEMINI_API_KEY` under the service's environment variables.
+For Render, add `GEMINI_API_KEY` under the service's environment variables. A user-entered key takes precedence for that request only.
+
+No key is committed to this public repository.
 
 ---
 
@@ -499,12 +537,12 @@ The LLM is used as an interpretation and explanation layer. Structured job and c
 | No scraping | No live scraping pipeline |
 | Efficient data processing | JSON → normalized SQLite |
 | Deduplication | Canonical title/company/location key |
-| AI classification | Skills, role category, experience enrichment |
+| AI / LLM classification | Gemini preprocessing + deterministic validation/fallback |
 | Structured filters | Platform, role, experience, work mode, location |
 | Resume parsing | PDF / DOCX / TXT |
-| Job recommendations | Skill overlap + TF-IDF |
+| Job recommendations | Skill overlap + TF-IDF + experience fit + role relevance |
 | Explainable recommendations | Matched skills + gaps + rationale |
-| AI assistant | Grounded assistant + Gemini enhancement |
+| AI assistant | Seven assignment intents + grounded Gemini enhancement + user-supplied key support |
 | Public deployment | Flask + Gunicorn + Render configuration |
 | Security | Environment secrets + temporary resume handling |
 

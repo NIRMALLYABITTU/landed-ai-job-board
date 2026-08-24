@@ -280,6 +280,11 @@ def api_chat():
         return jsonify({"error": "Please enter a question."}), 400
     job_hash = data.get("job_hash")
     compare_hash = data.get("compare_job_hash")
+    # Optional user-provided Gemini key. It is request-scoped only and is never
+    # stored in the database, Flask session, or filesystem.
+    user_gemini_key = (data.get("gemini_api_key") or "").strip()
+    if len(user_gemini_key) > 512:
+        return jsonify({"error": "Invalid Gemini API key."}), 400
 
     sid = _session_id()
     parsed = _RESUME_CACHE.get(sid)
@@ -291,6 +296,7 @@ def api_chat():
     reply = assistant_answer(
         question, resume_skills=resume_skills, job=job,
         jobs_all=all_jobs, compare_job=compare_job,
+        api_key=user_gemini_key,
     )
     return jsonify({"answer": reply})
 
