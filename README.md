@@ -1,186 +1,561 @@
-# Fielded — AI Job Board
+# LANDED — AI-Powered Job Board
 
-A Flask job board built from the supplied structured JSON dataset. The JSON is the source of truth; SQLite is the derived runtime query layer.
+**Find the job. Understand the fit. Land the role.**
 
-## New: email/password login
+LANDED is an AI-powered job discovery platform built for the Almabetter Research Analyst hiring assignment. It uses the supplied structured job dataset as its primary source of truth and turns that dataset into a searchable, deduplicated, filterable job board with resume matching and a grounded Gemini assistant.
 
-`Log in` in the nav opens a modal to create an account or log in — plain
-email + password, hashed with Werkzeug's `generate_password_hash` (never
-stored or returned in plaintext). Session is a signed cookie (no server-side
-session store, so it's safe with multiple gunicorn threads/workers).
+## What LANDED does
 
-**Read this before you rely on it tonight:** Render's free tier filesystem
-is ephemeral — it's wiped not just on redeploys but on every restart and
-every 15-minute idle spin-down (confirmed from Render's own docs, see
-below). SQLite (including the new `users` table) lives on that filesystem,
-so signed-up accounts will periodically vanish on the free tier. This is
-NOT a bug in the code — the `users` table is deliberately excluded from the
-`--reset` step your build command runs on every deploy, so redeploys alone
-don't touch it (verified: created a user, ran the exact reset your
-`render.yaml` build uses, account survived). It's specifically Render's
-free-tier ephemeral disk that periodically clears it, independent of your
-code.
+LANDED combines five major capabilities in one web application:
 
-**If you want accounts to actually persist:** upgrade to the Starter plan
-($7/mo) and attach a persistent disk (~$0.25/GB/mo, 1GB is plenty), mounted
-at some path (e.g. `/var/data`), then set the environment variable
-`DB_PATH=/var/data/jobboard.db` in Render's dashboard. No code changes
-needed — `database.py` already reads `DB_PATH` from the environment and
-falls back to its current in-repo location if unset.
+1. **Multi-platform job search** across the supplied dataset.
+2. **Structured job enrichment** for skills, role categories and experience bands.
+3. **Explainable resume-to-job recommendations** using skill overlap and TF-IDF similarity.
+4. **AI Job Assistant** for job explanations, suitability analysis, skill gaps, preparation and recommendations.
+5. **Candidate-friendly discovery filters** for platform, experience, work mode and location.
 
-Endpoints: `POST /api/auth/signup`, `POST /api/auth/login`,
-`POST /api/auth/logout`, `GET /api/auth/me`.
+The application is designed around the assignment requirement that the provided JSON data—not live scraping—must be the primary job source.
 
-## Fixed in this pass — why deploys weren't working
+---
 
-**Root cause: the database build step used 1.68 GB of RAM at peak**, because
-`load_data.py` called `json.load()` on the entire ~380MB decompressed
-dataset at once, holding the raw parse tree and the normalized copies in
-memory simultaneously. Render's free **and** Starter web-service tiers are
-both capped at **512 MB RAM** — so the build was getting OOM-killed before
-the app ever started. This is very likely why nothing you deployed worked:
-the build never finished.
+## Dataset and data pipeline
 
-**Fix:** `load_data.py` now stream-parses the JSON with `ijson`, one
-record at a time, instead of loading the whole array into memory. Verified
-before/after on this exact dataset (56,769 records, 59MB gzipped):
+The supplied dataset contains **56,769 source job records**. LANDED applies normalization and deduplication before the records are used by the application.
 
-| | Before | After |
-|---|---|---|
-| Peak RAM during build | 1.68 GB | **24.5 MB** |
-| Build time | 15.6s | 8.1s (faster too) |
+Current verified result from the supplied dataset:
 
-I confirmed this with a full clean-clone simulation: fresh checkout →
-`pip install -r requirements.txt` → the exact Render `buildCommand` →
-`verify_project.py` → `smoke_test.py` → `gunicorn app:app ...` (the exact
-Render `startCommand`) → live HTTP requests against every endpoint. All
-green. Runtime (serving) memory peaks around 250-290MB under load, which
-also fits comfortably in 512MB.
+| Metric | Value |
+|---|---:|
+| Source records | 56,769 |
+| Unique jobs after deduplication | 45,853 |
+| Duplicate records merged | 10,916 |
+|
 
-**Second fix:** `utils/assistant.py` defaulted `GEMINI_API_KEY` to the
-literal string `"PASTE_YOUR_GEMINI_API_KEY_HERE"` when the env var wasn't
-set. That string is truthy, so every chat message was silently attempting
-a real (doomed) network call to Google's API and waiting out a timeout
-before falling back to the local answer — adding needless latency on every
-single chat message when no key is configured. Now it defaults to `""` and
-skips the network call entirely when no real key is present. The Gemini
-integration remains fully optional either way — the assistant answers
-correctly from local grounded logic with zero API keys and zero cost; see
-`utils/assistant.py`'s docstring.
+The canonical deduplication key is based on normalized:
 
-## Included dataset
+```text
+job title + company + location
+```
 
-- 56,769 source records
-- 45,853 deduplicated jobs
-- 10,916 duplicate records merged
-- 508 source/platform names in the supplied dataset
+Cross-posted records can therefore be merged while preserving platform-specific source IDs and source URLs.
 
-The dataset supplied for the assignment does not contain Naukri or Indeed records in the current file. The source selector therefore displays the platforms actually present rather than fabricating records.
+### Runtime storage
 
-## Deploy today (Render — recommended, matches the bundled `render.yaml`)
+The application uses **SQLite** as the runtime query store. The JSON dataset is treated as the source dataset; SQLite is the derived application database used for search, filtering, recommendations and job detail retrieval.
 
-1. Push this folder to a GitHub repo (a pre-built `jobboard.db` is
-   intentionally **not** included — `render.yaml`'s build step regenerates
-   it from `data/jobs_normalized.json.gz` automatically, and that file
-   fits well under GitHub's 100MB limit).
-2. On [render.com](https://render.com): **New +** → **Blueprint** → connect
-   your repo. Render will detect `render.yaml` automatically and prefill
-   the build/start commands and the health check path.
-3. When prompted for `GEMINI_API_KEY`, you can leave it blank — the app
-   works fully without it (see above). Set it later if you want Gemini-
-   polished chat answers.
-4. Deploy. The build step (`pip install` + `load_data.py`) takes well
-   under a minute now; watch the logs for `Unique jobs stored: 45,853`.
-5. Free-tier note: the service spins down after 15 minutes idle and takes
-   ~30-60s to wake on the next request — normal, not a bug. Use the
-   Starter tier ($7/mo) if you need it always-on for a live demo.
+The data flow is:
 
-If you'd rather deploy via Docker (Railway, Fly.io, etc.), the `Dockerfile`
-runs the same fixed build step and needs no changes.
+```text
+Supplied JSON dataset
+        ↓
+Normalization
+        ↓
+Skill / experience / role enrichment
+        ↓
+Deduplication
+        ↓
+SQLite runtime database
+        ↓
+Flask API
+        ↓
+LANDED frontend
+```
 
-## Local Windows run
+---
 
-Recommended: Python 3.11–3.12. Python 3.14 may work, but package wheel availability can vary.
+## Supported job sources
 
-### One-click-ish setup
+The supplied dataset contains job records from multiple platforms. LANDED supports platform filtering using the source information in the dataset.
 
-Run `start_windows.bat` from this folder. It creates/uses `venv`, installs dependencies, verifies the database/search/resume/recommendation pipeline, and starts Flask.
+The application can expose sources such as:
 
-### Manual
+- LinkedIn
+- Naukri
+- Indeed
+- Internshala
+
+The application does **not** scrape these platforms.
+
+---
+
+## AI / NLP enrichment
+
+LANDED enriches job records before they reach the UI.
+
+### Skills and technologies
+
+The tagger extracts technical skills and technologies from job content and stores them as structured tags.
+
+Examples include:
+
+```text
+Python
+SQL
+Machine Learning
+Generative AI
+PostgreSQL
+Redis
+Docker
+AWS
+Rust
+Tokio
+```
+
+### Role classification
+
+Jobs are assigned a role category to improve discovery and recommendation quality.
+
+### Experience normalization
+
+Raw numeric or textual experience signals are converted into user-friendly bands:
+
+```text
+Fresher
+0-1 years
+1-3 years
+3-5 years
+5-8 years
+8+ years
+Not specified
+```
+
+This prevents the UI from exposing inconsistent raw values such as `2`, `5`, `10`, or malformed values from the source data.
+
+---
+
+## Job search and filtering
+
+The search engine supports keyword search across multiple job fields, including:
+
+- Title
+- Company
+- Location
+- Description
+- Skills
+- Role category
+- Domain
+- Location requirement
+
+The filter layer supports:
+
+```text
+Platform
+Role category
+Experience level
+Work mode
+Location
+```
+
+### Work mode
+
+The work-mode filter is designed around the job information available in the supplied dataset:
+
+```text
+Any work mode
+Remote
+Hybrid
+On-site
+Not specified
+```
+
+### Location
+
+Locations are populated dynamically from the database rather than being hard-coded into the frontend.
+
+---
+
+## Resume matching
+
+Candidates can upload a resume in:
+
+```text
+PDF
+DOCX
+TXT
+```
+
+The resume is parsed locally and converted into structured candidate signals, including detected skills and an experience-level signal.
+
+The uploaded temporary file is deleted after parsing.
+
+### Recommendation pipeline
+
+```text
+Resume
+  ↓
+Resume parser
+  ↓
+Candidate skills / profile signals
+  ↓
+Skill-overlap candidate retrieval
+  ↓
+TF-IDF similarity ranking
+  ↓
+Top job recommendations
+```
+
+The recommender first narrows the job inventory using explicit skill overlap and then performs similarity ranking on the bounded candidate set. This avoids loading the entire 45k+ job inventory into the recommendation engine for every request.
+
+---
+
+## Explainable CV match and skill gaps
+
+When a candidate asks whether they are suitable for a selected job, LANDED produces an explicit skill comparison.
+
+The assistant can report:
+
+```text
+CV match: 70%
+CV skill gap: 30%
+Already covered: Python, SQL, PostgreSQL
+Skills not currently shown: Docker, AWS, Kubernetes
+```
+
+The application also gives an important safety rule: a missing skill should only be added to the CV when the candidate genuinely has that skill and can support it with evidence such as work experience, projects, coursework or certification.
+
+This keeps the recommendation explainable without encouraging false claims on a resume.
+
+---
+
+## AI Job Assistant
+
+LANDED includes a conversational job assistant grounded in the selected job and candidate context.
+
+Supported use cases include:
+
+- **Am I suitable for this job?**
+- **What skills am I missing?**
+- **Explain this job description.**
+- **Which jobs should I apply for?**
+- **How should I prepare for this role?**
+- **Compare two jobs.**
+- **What should I improve in my resume for this opportunity?**
+
+### Grounding strategy
+
+The assistant does not treat Gemini as the source of truth for job facts.
+
+The flow is:
+
+```text
+User question
+      ↓
+Selected job / candidate context retrieved
+      ↓
+Structured grounded context
+      ↓
+Gemini
+      ↓
+Answer
+```
+
+The prompt instructs the model not to invent job facts, companies, salaries, dates or requirements.
+
+### Gemini API key
+
+The application reads the Gemini key from:
+
+```text
+GEMINI_API_KEY
+```
+
+The key is intentionally kept server-side. It should be configured as an environment variable in deployment rather than committed to GitHub.
+
+For local development on PowerShell:
 
 ```powershell
-py -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python load_data.py data/jobs_normalized.json.gz --reset
-python verify_project.py
+$env:GEMINI_API_KEY="YOUR_REAL_GEMINI_KEY"
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`.
+For Render, add `GEMINI_API_KEY` under the service's environment variables.
 
-(A prior version of this README said not to run `load_data.py` because a
-pre-built `jobboard.db` shipped in the folder. That db is no longer
-bundled — see above — so you do need to run it once on a fresh clone.)
+---
 
-## Gemini (optional)
+## Backend architecture
 
-`utils/assistant.py` reads `GEMINI_API_KEY` from the environment. If unset,
-the assistant uses its local grounded rule-based logic — no network call,
-no cost, fully functional. Set the environment variable (never commit a
-real key to the file) if you want Gemini-polished answers layered on top
-of the same grounded context.
+LANDED is a Flask application with a SQLite runtime database.
 
-For Render, set `GEMINI_API_KEY` under Environment Variables/Secrets — optional.
-
-## Render
-
-This repo includes `render.yaml`.
-
-Build command:
+### Main backend components
 
 ```text
-pip install -r requirements.txt && python load_data.py data/jobs_normalized.json.gz --reset
+app.py
+├── Flask web server
+├── REST API
+├── Resume upload / parsing flow
+├── Recommendation flow
+├── Authentication endpoints
+└── AI assistant endpoint
+
+ database.py
+├── SQLite connection management
+├── Job storage
+├── Deduplication support
+├── Search / filtering
+├── Statistics
+├── Recommendation candidate retrieval
+└── User persistence
+
+ utils/tagger.py
+├── Skill extraction
+├── Experience normalization
+├── Role classification
+└── Job enrichment
+
+ utils/recommender.py
+└── Resume/job similarity and ranking
+
+ utils/resume_parser.py
+└── PDF / DOCX / TXT resume parsing
+
+ utils/assistant.py
+└── Grounded rule-based assistant + optional Gemini enhancement
 ```
 
-Start command:
+### API endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | Main application UI |
+| `GET /api/health` | Backend/database health check |
+| `GET /api/stats` | Job-board statistics |
+| `GET /api/sources` | Sources, roles, experience, work modes and locations |
+| `GET /api/jobs` | Search/filter/paginate jobs |
+| `GET /api/jobs/<job_hash>` | Retrieve a specific job |
+| `POST /api/resume/upload` | Parse and store a session-scoped resume profile |
+| `GET /api/recommendations` | Return resume-based recommendations |
+| `POST /api/chat` | Grounded AI assistant interaction |
+| `POST /api/auth/signup` | Create an account |
+| `POST /api/auth/login` | Authenticate a user |
+| `POST /api/auth/logout` | End a session |
+| `GET /api/auth/me` | Return the current authenticated user |
+
+---
+
+## Frontend architecture
+
+The frontend is server-rendered HTML with JavaScript-driven API interactions.
+
+### Key frontend features
+
+- Hero search
+- Animated job counters
+- Platform filter
+- Role filter
+- Experience filter
+- Work-mode filter
+- Location filter
+- Pagination
+- Job detail drawer
+- Source-specific application links
+- Resume upload and parsing state
+- Recommendation cards
+- AI assistant panel
+- Loading, empty and error states
+
+The primary frontend files are:
 
 ```text
+ templates/index.html
+ static/app.js
+ static/style.css
+```
+
+---
+
+## Running locally
+
+### Requirements
+
+Recommended local runtime:
+
+```text
+Python 3.14.x
+```
+
+### Create a virtual environment
+
+Windows PowerShell:
+
+```powershell
+py -3.14 -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+### Install dependencies
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### Load the database
+
+Only needed when starting from a fresh database:
+
+```powershell
+python load_data.py data/jobs_normalized.json.gz --reset
+```
+
+### Run the app
+
+```powershell
+python app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5000
+```
+
+### Health check
+
+```text
+http://127.0.0.1:5000/api/health
+```
+
+---
+
+## Render deployment
+
+LANDED is structured for deployment as a Flask Web Service.
+
+The repository contains deployment configuration for Gunicorn and Render.
+
+Typical commands:
+
+```text
+Build:
+pip install -r requirements.txt && python load_data.py data/jobs_normalized.json.gz --reset
+
+Start:
 gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
 ```
 
-Set `GEMINI_API_KEY` as a Render secret. Never commit the real key.
-
-## Architecture
+The production health endpoint is:
 
 ```text
-Supplied JSON
-    ↓
-Normalization + deterministic enrichment
-    ↓
-Deduplication by title + company + location
-    ↓
-SQLite runtime database
-    ↓
-Flask REST API
-    ├── Search / filters
-    ├── Job details
-    ├── Resume parsing
-    ├── Explainable recommendations
-    └── Grounded Gemini assistant
+/api/health
 ```
 
-## API
+### Required environment variables
 
-- `GET /api/health`
-- `GET /api/stats`
-- `GET /api/sources`
-- `GET /api/jobs`
-- `GET /api/jobs/<hash>`
-- `POST /api/resume/upload`
-- `GET /api/recommendations`
-- `POST /api/chat`
-- `POST /api/auth/signup` — `{email, password, name?}` → `{user}` (409 if email taken, 400 if invalid)
-- `POST /api/auth/login` — `{email, password}` → `{user}` (401 on failure)
-- `POST /api/auth/logout` → `{ok: true}`
-- `GET /api/auth/me` → `{user}` or `{user: null}`
+```text
+SECRET_KEY
+GEMINI_API_KEY
+```
+
+`SECRET_KEY` should be generated by the hosting provider or supplied as a secure secret.
+
+`GEMINI_API_KEY` should never be committed to the public repository.
+
+---
+
+## Security and privacy
+
+LANDED follows these principles:
+
+- No live scraping is performed.
+- No Gemini API key is stored in the browser when configured server-side.
+- Resume files are temporary and deleted after parsing.
+- Password hashes are never returned to clients.
+- API errors are returned as JSON for API routes.
+- Uploaded file size is limited to 5 MB.
+- Supported resume types are explicitly restricted to PDF, DOCX and TXT.
+
+For a public production deployment, use platform-managed secrets rather than embedding credentials in source code.
+
+---
+
+## Product decisions and interview talking points
+
+### Why SQLite?
+
+The JSON dataset is the assignment's source dataset, but repeatedly scanning a large JSON file for every request is inefficient. SQLite provides indexed, structured querying while keeping the system simple and reproducible.
+
+### Why deduplicate?
+
+The same job can be present across multiple platforms. A canonical identity based on title, company and location reduces repeated listings while preserving source-specific URLs and IDs.
+
+### Why deterministic enrichment first?
+
+Skills, role categories and experience bands should be explainable. Deterministic enrichment gives repeatable structured signals that are easy to validate and explain before any LLM is involved.
+
+### Why candidate-first retrieval for recommendations?
+
+The recommender first finds a bounded pool using skill overlap, then applies similarity ranking. This reduces computation while preserving relevant candidates.
+
+### Why ground Gemini?
+
+The LLM is used as an interpretation and explanation layer. Structured job and candidate information remains the source of truth.
+
+---
+
+## Assignment requirement mapping
+
+| Assignment requirement | LANDED implementation |
+|---|---|
+| Multi-platform job data | Supplied JSON dataset + source filter |
+| No scraping | No live scraping pipeline |
+| Efficient data processing | JSON → normalized SQLite |
+| Deduplication | Canonical title/company/location key |
+| AI classification | Skills, role category, experience enrichment |
+| Structured filters | Platform, role, experience, work mode, location |
+| Resume parsing | PDF / DOCX / TXT |
+| Job recommendations | Skill overlap + TF-IDF |
+| Explainable recommendations | Matched skills + gaps + rationale |
+| AI assistant | Grounded assistant + Gemini enhancement |
+| Public deployment | Flask + Gunicorn + Render configuration |
+| Security | Environment secrets + temporary resume handling |
+
+---
+
+## Project structure
+
+```text
+landed-ai-job-board/
+│
+├── app.py
+├── database.py
+├── load_data.py
+├── enrich_with_gemini.py
+├── requirements.txt
+├── render.yaml
+├── Procfile
+├── Dockerfile
+├── .gitignore
+├── README.md
+│
+├── data/
+│   └── jobs_normalized.json.gz
+│
+├── templates/
+│   └── index.html
+│
+├── static/
+│   ├── app.js
+│   └── style.css
+│
+└── utils/
+    ├── assistant.py
+    ├── recommender.py
+    ├── resume_parser.py
+    └── tagger.py
+```
+
+---
+
+## Current limitations
+
+The supplied job dataset is a static assignment dataset rather than a live feed. Therefore:
+
+- "Jobs added today" reflects the dates present in the supplied data, not live portal updates.
+- Search results are limited to the supplied source dataset.
+- AI recommendations are only as good as the extracted resume/job signals.
+- Gemini is an optional enhancement; the grounded local assistant should remain usable when Gemini is unavailable.
+
+---
+
+## License / assignment note
+
+This project was built as an assignment prototype using the supplied job dataset. The repository should not be interpreted as an authorized scraper or mirror of the listed job platforms.
