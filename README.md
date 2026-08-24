@@ -6,7 +6,7 @@
 
 > Replace the two placeholders below before submitting the assignment. The evaluator must be able to open them directly from this README.
 
-- **Live deployed prototype:** `REPLACE_WITH_YOUR_RENDER_URL`
+- **Live deployed prototype:** `https://landed-ai-job-board.onrender.com/`
 - **Explanation video (English, view access enabled):** `REPLACE_WITH_GOOGLE_DRIVE_OR_VIDEO_URL`
 - **Public GitHub repository:** https://github.com/NIRMALLYABITTU/landed-ai-job-board
 
